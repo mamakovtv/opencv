@@ -142,6 +142,7 @@ void initializeLayerFactory()
     CV_DNN_REGISTER_LAYER_CLASS(Identity,       BlankLayer);
     CV_DNN_REGISTER_LAYER_CLASS(Silence,        BlankLayer);
     CV_DNN_REGISTER_LAYER_CLASS(Const,          ConstLayer);
+    CV_DNN_REGISTER_LAYER_CLASS(Reduce,         ReduceLayer);
     CV_DNN_REGISTER_LAYER_CLASS(Arg,            ArgLayer);
 
     CV_DNN_REGISTER_LAYER_CLASS(Crop,           CropLayer);

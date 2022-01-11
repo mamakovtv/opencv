@@ -284,6 +284,12 @@ CV__DNN_INLINE_NS_BEGIN
         static Ptr<LRNLayer> create(const LayerParams& params);
     };
 
+    class CV_EXPORTS ReduceLayer : public Layer
+    {
+    public:
+        static Ptr<ReduceLayer> create(const LayerParams& params);
+    };
+
 
     /** @brief ArgMax/ArgMin layer
      * @note returns indices as floats, which means the supported range is [-2^24; 2^24]

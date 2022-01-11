@@ -1015,6 +1015,13 @@ void ONNXImporter::parseReduce(LayerParams& layerParams, const opencv_onnx::Node
         pool = "MAX";
     else if (layer_type == "ReduceSum")
         pool = "SUM";
+    else if (layer_type == "ReduceL1" || layer_type == "ReduceL2")
+    {
+        layerParams.type = "Reduce";
+        layerParams.set("type", layer_type == "ReduceL1" ? "L1" : "L2");
+        addLayer(layerParams, node_proto);
+        return;
+    }
     else
         pool = "AVE";
     layerParams.set("pool", pool);
@@ -3304,7 +3311,7 @@ void ONNXImporter::buildDispatchMap_ONNX_AI(int opset_version)
     dispatch["MaxPool"] = &ONNXImporter::parseMaxPool;
     dispatch["AveragePool"] = &ONNXImporter::parseAveragePool;
     dispatch["GlobalAveragePool"] = dispatch["GlobalMaxPool"] = dispatch["ReduceMean"] = dispatch["ReduceSum"] =
-            dispatch["ReduceMax"] = &ONNXImporter::parseReduce;
+            dispatch["ReduceMax"] = dispatch["ReduceL1"] = dispatch["ReduceL2"] = &ONNXImporter::parseReduce;
     dispatch["Slice"] = &ONNXImporter::parseSlice;
     dispatch["Split"] = &ONNXImporter::parseSplit;
     dispatch["Add"] = dispatch["Sum"] = dispatch["Sub"] = &ONNXImporter::parseBias;
