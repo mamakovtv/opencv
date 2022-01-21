@@ -112,6 +112,8 @@ static bool cv_tiffSetErrorHandler()
 
 static const char fmtSignTiffII[] = "II\x2a\x00";
 static const char fmtSignTiffMM[] = "MM\x00\x2a";
+static const char fmtSignBigTiffII[] = "II\x2b\x00";
+static const char fmtSignBigTiffMM[] = "MM\x00\x2b";
 
 TiffDecoder::TiffDecoder()
 {
@@ -140,7 +142,9 @@ bool TiffDecoder::checkSignature( const String& signature ) const
 {
     return signature.size() >= 4 &&
         (memcmp(signature.c_str(), fmtSignTiffII, 4) == 0 ||
-        memcmp(signature.c_str(), fmtSignTiffMM, 4) == 0);
+        memcmp(signature.c_str(), fmtSignTiffMM, 4) == 0 ||
+        memcmp(signature.c_str(), fmtSignBigTiffII, 4) == 0 ||
+        memcmp(signature.c_str(), fmtSignBigTiffMM, 4) == 0);
 }
 
 int TiffDecoder::normalizeChannelsNumber(int channels) const
@@ -295,34 +299,53 @@ bool TiffDecoder::readHeader()
                 (ncn != 1 && ncn != 3 && ncn != 4)))
                 bpp = 8;
 
+            uint16 sample_format = SAMPLEFORMAT_UINT;
+            TIFFGetField(tif, TIFFTAG_SAMPLEFORMAT, &sample_format);
             int wanted_channels = normalizeChannelsNumber(ncn);
-            switch(bpp)
+            switch (bpp)
             {
-                case 1:
-                    m_type = CV_MAKETYPE(CV_8U, !isGrayScale ? wanted_channels : 1);
-                    result = true;
-                    break;
-                case 8:
-                    //Palette color, the value of the component is used as an index into the red,
-                    //green and blue curves in the ColorMap field to retrieve an RGB triplet that defines the color.
-                    if(photometric == PHOTOMETRIC_PALETTE)
-                        m_type = CV_MAKETYPE(CV_8U, 3);
-                    else
-                        m_type = CV_MAKETYPE(CV_8U, !isGrayScale ? wanted_channels : 1);
-                    result = true;
-                    break;
-                case 16:
-                    m_type = CV_MAKETYPE(CV_16U, !isGrayScale ? wanted_channels : 1);
-                    result = true;
-                    break;
-                case 32:
-                    m_type = CV_MAKETYPE(CV_32F, wanted_channels);
-                    result = true;
-                    break;
-                case 64:
-                    m_type = CV_MAKETYPE(CV_64F, wanted_channels);
-                    result = true;
-                    break;
+            case 1:
+            {
+                CV_Check((int)sample_format, sample_format == SAMPLEFORMAT_UINT || sample_format == SAMPLEFORMAT_INT, "");
+                int depth = sample_format == SAMPLEFORMAT_INT ? CV_8S : CV_8U;
+                m_type = CV_MAKETYPE(depth, !isGrayScale ? wanted_channels : 1);
+                result = true;
+                break;
+            }
+            case 8:
+            {
+                //Palette color, the value of the component is used as an index into the red,
+                //green and blue curves in the ColorMap field to retrieve an RGB triplet that defines the color.
+                CV_Check((int)sample_format, sample_format == SAMPLEFORMAT_UINT || sample_format == SAMPLEFORMAT_INT, "");
+                int depth = sample_format == SAMPLEFORMAT_INT ? CV_8S : CV_8U;
+                if (photometric == PHOTOMETRIC_PALETTE)
+                    m_type = CV_MAKETYPE(depth, 3);
+                else
+                    m_type = CV_MAKETYPE(depth, !isGrayScale ? wanted_channels : 1);
+                result = true;
+                break;
+            }
+            case 16:
+            {
+                CV_Check((int)sample_format, sample_format == SAMPLEFORMAT_UINT || sample_format == SAMPLEFORMAT_INT, "");
+                int depth = sample_format == SAMPLEFORMAT_INT ? CV_16S : CV_16U;
+                m_type = CV_MAKETYPE(depth, !isGrayScale ? wanted_channels : 1);
+                result = true;
+                break;
+            }
+            case 32:
+            {
+                CV_Check((int)sample_format, sample_format == SAMPLEFORMAT_IEEEFP || sample_format == SAMPLEFORMAT_INT, "");
+                int depth = sample_format == SAMPLEFORMAT_IEEEFP ? CV_32F : CV_32S;
+                m_type = CV_MAKETYPE(depth, wanted_channels);
+                result = true;
+                break;
+            }
+            case 64:
+                CV_CheckEQ((int)sample_format, SAMPLEFORMAT_IEEEFP, "");
+                m_type = CV_MAKETYPE(CV_64F, wanted_channels);
+                result = true;
+                break;
             default:
                 CV_Error(cv::Error::StsError, "Invalid bitsperpixel value read from TIFF header! Must be 1, 8, 16, 32 or 64.");
             }
@@ -432,7 +455,7 @@ bool  TiffDecoder::readData( Mat& img )
 
     bool color = img.channels() > 1;
 
-    CV_CheckType(type, depth == CV_8U || depth == CV_16U || depth == CV_32F || depth == CV_64F, "");
+    CV_CheckType(type, depth == CV_8U || depth == CV_8S || depth == CV_16U || depth == CV_16S || depth == CV_32S || depth == CV_32F || depth == CV_64F, "");
 
     if (m_width && m_height)
     {
@@ -649,7 +672,7 @@ bool  TiffDecoder::readData( Mat& img )
                                 CV_TIFF_CHECK_CALL((int)TIFFReadEncodedTile(tif, tileidx, buffer, buffer_size) >= 0);
                             }
 
-                            Mat m_tile(Size(tile_width0, tile_height0), CV_MAKETYPE((dst_bpp == 32) ? CV_32F : CV_64F, ncn), buffer);
+                            Mat m_tile(Size(tile_width0, tile_height0), CV_MAKETYPE((dst_bpp == 32) ? (depth == CV_32S ? CV_32S : CV_32F) : CV_64F, ncn), buffer);
                             Rect roi_tile(0, 0, tile_width, tile_height);
                             Rect roi_img(x, img_y, tile_width, tile_height);
                             if (!m_hdr && ncn == 3)
